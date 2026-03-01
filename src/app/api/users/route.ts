@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 import { createHash } from "crypto"
 
-import { queryRaw, sql } from "@/lib/db"
+import { sql } from "@/lib/db"
 
 import { parseDbError } from "./errors"
 import { createUserSchema } from "./validations"
@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim() ?? null
     const sortBy = parseSort(searchParams.get("sortBy"))
     const sortOrder = parseSortOrder(searchParams.get("sortOrder"))
-
     const offset = (page - 1) * pageSize
     const searchPattern = search ? `%${search}%` : null
 
@@ -60,36 +59,17 @@ export async function GET(request: NextRequest) {
       total = (countResult as { total: number }[])[0]?.total ?? 0
     }
 
-    let usedRaw = false
-    if (sortBy) {
-      const orderDir = sortOrder.toUpperCase()
-      const safeOrder = `"${sortBy}"`
-      try {
-        if (searchPattern) {
-          const text = `
-            SELECT id, username, email
-            FROM users
-            WHERE (username ILIKE $1 OR email ILIKE $1)
-            ORDER BY ${safeOrder} ${orderDir}
-            LIMIT $2 OFFSET $3
-          `
-          rows = (await queryRaw(text, [searchPattern, pageSize, offset])) as UserRow[]
-        } else {
-          const text = `
-            SELECT id, username, email
-            FROM users
-            ORDER BY ${safeOrder} ${orderDir}
-            LIMIT $1 OFFSET $2
-          `
-          rows = (await queryRaw(text, [pageSize, offset])) as UserRow[]
-        }
-        usedRaw = true
-      } catch {
-        // queryRaw not available; fall back to default order
-      }
-    }
-    if (!usedRaw) {
-      if (searchPattern) {
+    const orderAsc = sortOrder === "asc"
+    if (searchPattern) {
+      if (sortBy === "username") {
+        rows = (orderAsc
+          ? await sql`SELECT id, username, email FROM users WHERE (username ILIKE ${searchPattern} OR email ILIKE ${searchPattern}) ORDER BY username ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, username, email FROM users WHERE (username ILIKE ${searchPattern} OR email ILIKE ${searchPattern}) ORDER BY username DESC LIMIT ${pageSize} OFFSET ${offset}`) as UserRow[]
+      } else if (sortBy === "email") {
+        rows = (orderAsc
+          ? await sql`SELECT id, username, email FROM users WHERE (username ILIKE ${searchPattern} OR email ILIKE ${searchPattern}) ORDER BY email ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, username, email FROM users WHERE (username ILIKE ${searchPattern} OR email ILIKE ${searchPattern}) ORDER BY email DESC LIMIT ${pageSize} OFFSET ${offset}`) as UserRow[]
+      } else {
         rows = (await sql`
           SELECT id, username, email
           FROM users
@@ -97,6 +77,16 @@ export async function GET(request: NextRequest) {
           ORDER BY id DESC
           LIMIT ${pageSize} OFFSET ${offset}
         `) as UserRow[]
+      }
+    } else {
+      if (sortBy === "username") {
+        rows = (orderAsc
+          ? await sql`SELECT id, username, email FROM users ORDER BY username ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, username, email FROM users ORDER BY username DESC LIMIT ${pageSize} OFFSET ${offset}`) as UserRow[]
+      } else if (sortBy === "email") {
+        rows = (orderAsc
+          ? await sql`SELECT id, username, email FROM users ORDER BY email ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, username, email FROM users ORDER BY email DESC LIMIT ${pageSize} OFFSET ${offset}`) as UserRow[]
       } else {
         rows = (await sql`
           SELECT id, username, email

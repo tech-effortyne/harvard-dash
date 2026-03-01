@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server"
 import { NextResponse } from "next/server"
 
-import { queryRaw, sql } from "@/lib/db"
+import { sql } from "@/lib/db"
 
 import { parseDbError } from "./errors"
 import {
@@ -44,9 +44,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim() ?? null
     const sortBy = parseSort(searchParams.get("sortBy"))
     const sortOrder = parseSortOrder(searchParams.get("sortOrder"))
-
     const offset = (page - 1) * pageSize
-
     const searchPattern = search ? `%${search}%` : null
 
     let total = 0
@@ -66,36 +64,26 @@ export async function GET(request: NextRequest) {
       total = (countResult as { total: number }[])[0]?.total ?? 0
     }
 
-    let usedRaw = false
-    if (sortBy) {
-      const orderDir = sortOrder.toUpperCase()
-      const safeOrder = `"${sortBy}"`
-      try {
-        if (searchPattern) {
-          const text = `
-            SELECT id, name, register_no, serial_number, year
-            FROM students
-            WHERE (name ILIKE $1 OR serial_number::text ILIKE $1 OR register_no ILIKE $1)
-            ORDER BY ${safeOrder} ${orderDir}
-            LIMIT $2 OFFSET $3
-          `
-          rows = (await queryRaw(text, [searchPattern, pageSize, offset])) as StudentRow[]
-        } else {
-          const text = `
-            SELECT id, name, register_no, serial_number, year
-            FROM students
-            ORDER BY ${safeOrder} ${orderDir}
-            LIMIT $1 OFFSET $2
-          `
-          rows = (await queryRaw(text, [pageSize, offset])) as StudentRow[]
-        }
-        usedRaw = true
-      } catch {
-        // queryRaw not available (e.g. serverless); fall through to sql with default order
-      }
-    }
-    if (!usedRaw) {
-      if (searchPattern) {
+    // Serverless-safe: explicit ORDER BY per column/order (no dynamic SQL)
+    const orderAsc = sortOrder === "asc"
+    if (searchPattern) {
+      if (sortBy === "name") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY name ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY name DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "serial_number") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY serial_number ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY serial_number DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "register_no") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY register_no ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY register_no DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "year") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY year ASC NULLS LAST LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students WHERE (name ILIKE ${searchPattern} OR serial_number::text ILIKE ${searchPattern} OR register_no ILIKE ${searchPattern}) ORDER BY year DESC NULLS LAST LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else {
         rows = (await sql`
           SELECT id, name, register_no, serial_number, year
           FROM students
@@ -103,6 +91,24 @@ export async function GET(request: NextRequest) {
           ORDER BY id DESC
           LIMIT ${pageSize} OFFSET ${offset}
         `) as StudentRow[]
+      }
+    } else {
+      if (sortBy === "name") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY name ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY name DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "serial_number") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY serial_number ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY serial_number DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "register_no") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY register_no ASC LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY register_no DESC LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
+      } else if (sortBy === "year") {
+        rows = (orderAsc
+          ? await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY year ASC NULLS LAST LIMIT ${pageSize} OFFSET ${offset}`
+          : await sql`SELECT id, name, register_no, serial_number, year FROM students ORDER BY year DESC NULLS LAST LIMIT ${pageSize} OFFSET ${offset}`) as StudentRow[]
       } else {
         rows = (await sql`
           SELECT id, name, register_no, serial_number, year

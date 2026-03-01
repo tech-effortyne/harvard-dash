@@ -15,10 +15,12 @@ const useServerless =
 
 let sql: any
 
+let pool: Pool | null = null
+
 if (useServerless) {
   sql = neon(connectionString)
 } else {
-  const pool = new Pool({ connectionString })
+  pool = new Pool({ connectionString })
 
   sql = async (strings: TemplateStringsArray, ...values: any[]) => {
     const text = strings.reduce(
@@ -26,9 +28,21 @@ if (useServerless) {
       ""
     )
 
-    const res = await pool.query(text, values)
+    const res = await pool!.query(text, values)
     return res.rows
   }
+}
+
+/** Run a parameterized raw query. Only available when using pg Pool (non-serverless). Use for dynamic ORDER BY with whitelisted columns. */
+export async function queryRaw(
+  text: string,
+  values: unknown[],
+): Promise<unknown[]> {
+  if (!pool) {
+    throw new Error("queryRaw is only available when using pg Pool (DB_SERVERLESS=false)")
+  }
+  const res = await pool.query(text, values)
+  return res.rows as unknown[]
 }
 
 export { sql }

@@ -34,6 +34,10 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
 
+  function handleLogout() {
+    window.location.href = "/api/logout"
+  }
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -84,7 +88,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <IconLogout />
               Log out
             </DropdownMenuItem>

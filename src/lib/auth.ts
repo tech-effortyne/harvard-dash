@@ -13,8 +13,10 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret)
 }
 
-export async function createSession(email: string) {
-  const token = await new SignJWT({ email })
+export type SessionUser = { email: string; username?: string }
+
+export async function createSession(email: string, username?: string) {
+  const token = await new SignJWT({ email, username: username ?? null })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime("7d")
@@ -45,7 +47,10 @@ export async function getSession() {
 
   try {
     const { payload } = await jwtVerify(token, getJwtSecret())
-    return { email: payload.email as string }
+    return {
+      email: payload.email as string,
+      username: (payload.username as string) ?? undefined,
+    } as SessionUser
   } catch {
     return null
   }

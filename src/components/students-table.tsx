@@ -7,12 +7,37 @@ import {
 	ArrowUpDown,
 	ChevronLeft,
 	ChevronRight,
-	Pencil,
 	Plus,
+	SquarePen,
 	Trash2,
 } from "lucide-react";
+import { useForm } from "react-hook-form";
 
+import {
+	createStudentSchema,
+	updateStudentSchema,
+} from "@/app/api/students/validations";
+import type {
+	CreateStudentInput,
+	UpdateStudentInput,
+} from "@/app/api/students/validations";
 import { Button } from "@/components/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle,
+} from "@/components/ui/dialog";
+import {
+	Form,
+	FormControl,
+	FormField,
+	FormItem,
+	FormLabel,
+	FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
 	Table,
@@ -24,6 +49,7 @@ import {
 } from "@/components/ui/table";
 
 export type StudentRow = {
+	id: number;
 	name: string;
 	register_no: string;
 	serial_number: string;
@@ -57,7 +83,7 @@ type StudentsTableProps = {
 	onDelete?: (student: StudentRow) => void;
 };
 
-export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
+export function StudentsTable(_: StudentsTableProps) {
 	const [data, setData] = useState<StudentRow[]>([]);
 	const [page, setPage] = useState(1);
 	const [pageSize] = useState(15);
@@ -68,6 +94,33 @@ export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
 	const [sortBy, setSortBy] = useState<SortColumn | null>(null);
 	const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 	const [loading, setLoading] = useState(true);
+	const [addOpen, setAddOpen] = useState(false);
+	const [addSubmitting, setAddSubmitting] = useState(false);
+	const [addError, setAddError] = useState<string | null>(null);
+	const [studentToDelete, setStudentToDelete] = useState<StudentRow | null>(null);
+	const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+	const [deleteError, setDeleteError] = useState<string | null>(null);
+	const [studentToEdit, setStudentToEdit] = useState<StudentRow | null>(null);
+	const [editSubmitting, setEditSubmitting] = useState(false);
+	const [editError, setEditError] = useState<string | null>(null);
+
+	const addForm = useForm<CreateStudentInput>({
+		defaultValues: {
+			name: "",
+			register_no: "",
+			serial_number: "",
+			year: "",
+		},
+	});
+
+	const editForm = useForm<CreateStudentInput>({
+		defaultValues: {
+			name: "",
+			register_no: "",
+			serial_number: "",
+			year: "",
+		},
+	});
 
 	const fetchStudents = useCallback(async () => {
 		setLoading(true);
@@ -103,6 +156,140 @@ export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
 		e.preventDefault();
 		setSearch(searchInput.trim());
 		setPage(1);
+	};
+
+	const openAddDialog = () => {
+		setAddError(null);
+		addForm.reset({
+			name: "",
+			register_no: "",
+			serial_number: "",
+			year: "",
+		});
+		setAddOpen(true);
+	};
+
+	const openEditDialog = (student: StudentRow) => {
+		setEditError(null);
+		editForm.reset({
+			name: student.name,
+			register_no: student.register_no,
+			serial_number: student.serial_number,
+			year: student.year ?? "",
+		});
+		setStudentToEdit(student);
+	};
+
+	const handleEditSubmit = async (data: CreateStudentInput) => {
+		if (!studentToEdit) return;
+		const payload: UpdateStudentInput = { id: studentToEdit.id, ...data };
+		const parsed = updateStudentSchema.safeParse(payload);
+		if (!parsed.success) {
+			parsed.error.issues.forEach((issue) => {
+				const path = issue.path[0];
+				if (path && typeof path === "string" && path !== "id") {
+					editForm.setError(path as keyof CreateStudentInput, {
+						message: issue.message,
+					});
+				}
+			});
+			return;
+		}
+		setEditError(null);
+		setEditSubmitting(true);
+		try {
+			const res = await fetch("/api/students", {
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					id: parsed.data.id,
+					name: parsed.data.name.trim(),
+					register_no: parsed.data.register_no.trim(),
+					serial_number: parsed.data.serial_number.trim(),
+					year: parsed.data.year.trim(),
+				}),
+			});
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setEditError(json.error ?? "Failed to update student.");
+				return;
+			}
+			setStudentToEdit(null);
+			fetchStudents();
+		} catch {
+			setEditError("Failed to update student.");
+		} finally {
+			setEditSubmitting(false);
+		}
+	};
+
+	const handleDeleteClick = (student: StudentRow) => {
+		setDeleteError(null);
+		setStudentToDelete(student);
+	};
+
+	const handleDeleteConfirm = async () => {
+		if (!studentToDelete) return;
+		setDeleteError(null);
+		setDeleteSubmitting(true);
+		try {
+			const res = await fetch("/api/students", {
+				method: "DELETE",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ id: studentToDelete.id }),
+			});
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setDeleteError(json.error ?? "Failed to delete student.");
+				return;
+			}
+			setStudentToDelete(null);
+			fetchStudents();
+		} catch {
+			setDeleteError("Failed to delete student.");
+		} finally {
+			setDeleteSubmitting(false);
+		}
+	};
+
+	const handleAddSubmit = async (data: CreateStudentInput) => {
+		const parsed = createStudentSchema.safeParse(data);
+		if (!parsed.success) {
+			parsed.error.issues.forEach((issue) => {
+				const path = issue.path[0];
+				if (path && typeof path === "string") {
+					addForm.setError(path as keyof CreateStudentInput, {
+						message: issue.message,
+					});
+				}
+			});
+			return;
+		}
+		setAddError(null);
+		setAddSubmitting(true);
+		try {
+			const res = await fetch("/api/students", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					name: parsed.data.name.trim(),
+					register_no: parsed.data.register_no.trim(),
+					serial_number: parsed.data.serial_number.trim(),
+					year: parsed.data.year.trim(),
+				}),
+			});
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				setAddError(json.error ?? "Failed to add student.");
+				return;
+			}
+			setAddOpen(false);
+			fetchStudents();
+		} catch {
+			setAddError("Failed to add student.");
+		} finally {
+			setAddSubmitting(false);
+		}
 	};
 
 	const cycleSort = (column: SortColumn) => {
@@ -159,11 +346,276 @@ export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
 						Search
 					</Button>
 				</form>
-				<Button onClick={() => onAdd?.()} variant="default">
+				<Button onClick={openAddDialog} variant="default">
 					<Plus className="size-4" />
 					Add
 				</Button>
 			</div>
+
+			<Dialog open={addOpen} onOpenChange={setAddOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Add student</DialogTitle>
+						<DialogDescription>
+							Fill in the student details. All text is stored in uppercase.
+						</DialogDescription>
+					</DialogHeader>
+					<Form {...addForm}>
+						<form
+							onSubmit={addForm.handleSubmit(handleAddSubmit)}
+							className="grid gap-4"
+						>
+							{addError && (
+								<p className="text-destructive text-sm">{addError}</p>
+							)}
+							<FormField
+								control={addForm.control}
+								name="name"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Name</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Student name"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={addForm.control}
+								name="register_no"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Register No</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Register number"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={addForm.control}
+								name="serial_number"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Serial Number</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Serial number"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={addForm.control}
+								name="year"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Year</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => {
+													const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+													field.onChange(digits);
+												}}
+												placeholder="2025 (4 digits only)"
+												maxLength={4}
+												inputMode="numeric"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setAddOpen(false)}
+									disabled={addSubmitting}
+								>
+									Cancel
+								</Button>
+								<Button type="submit" disabled={addSubmitting}>
+									{addSubmitting ? "Adding…" : "Add student"}
+								</Button>
+							</DialogFooter>
+						</form>
+					</Form>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog
+				open={!!studentToEdit}
+				onOpenChange={(open) => !open && setStudentToEdit(null)}
+			>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Edit student</DialogTitle>
+						<DialogDescription>
+							Update the student details. All fields are required. All text is stored in uppercase.
+						</DialogDescription>
+					</DialogHeader>
+					<Form {...editForm}>
+						<form
+							onSubmit={editForm.handleSubmit(handleEditSubmit)}
+							className="grid gap-4"
+						>
+							{editError && (
+								<p className="text-destructive text-sm">{editError}</p>
+							)}
+							<FormField
+								control={editForm.control}
+								name="name"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Name</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Student name"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={editForm.control}
+								name="register_no"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Register No</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Register number"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={editForm.control}
+								name="serial_number"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Serial Number</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+												placeholder="Serial number"
+												className="uppercase"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<FormField
+								control={editForm.control}
+								name="year"
+								render={({ field }) => (
+									<FormItem>
+										<FormLabel>Year</FormLabel>
+										<FormControl>
+											<Input
+												{...field}
+												onChange={(e) => {
+													const digits = e.target.value.replace(/\D/g, "").slice(0, 4);
+													field.onChange(digits);
+												}}
+												placeholder="2025 (4 digits only)"
+												maxLength={4}
+												inputMode="numeric"
+												autoComplete="off"
+											/>
+										</FormControl>
+										<FormMessage />
+									</FormItem>
+								)}
+							/>
+							<DialogFooter>
+								<Button
+									type="button"
+									variant="outline"
+									onClick={() => setStudentToEdit(null)}
+									disabled={editSubmitting}
+								>
+									Cancel
+								</Button>
+								<Button type="submit" disabled={editSubmitting}>
+									{editSubmitting ? "Saving…" : "Save changes"}
+								</Button>
+							</DialogFooter>
+						</form>
+					</Form>
+				</DialogContent>
+			</Dialog>
+
+			<Dialog open={!!studentToDelete} onOpenChange={(open) => !open && setStudentToDelete(null)}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Delete student</DialogTitle>
+						<DialogDescription>
+							Are you sure you want to delete{" "}
+							<strong>{studentToDelete?.name}</strong> (Register No: {studentToDelete?.register_no})?
+							This action cannot be undone.
+						</DialogDescription>
+					</DialogHeader>
+					{deleteError && (
+						<p className="text-destructive text-sm">{deleteError}</p>
+					)}
+					<DialogFooter>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={() => setStudentToDelete(null)}
+							disabled={deleteSubmitting}
+						>
+							Cancel
+						</Button>
+						<Button
+							type="button"
+							variant="destructive"
+							onClick={handleDeleteConfirm}
+							disabled={deleteSubmitting}
+						>
+							{deleteSubmitting ? "Deleting…" : "Delete"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			<div className="overflow-hidden rounded-lg border">
 				<Table>
@@ -206,7 +658,7 @@ export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
 						) : (
 							data.map((student) => (
 								<TableRow
-									key={`${student.serial_number}-${student.register_no}`}
+									key={student.id}
 								>
 									<TableCell className="font-medium">{student.name}</TableCell>
 									<TableCell>{student.serial_number}</TableCell>
@@ -218,16 +670,16 @@ export function StudentsTable({ onAdd, onEdit, onDelete }: StudentsTableProps) {
 												variant="ghost"
 												size="icon"
 												className="size-8"
-												onClick={() => onEdit?.(student)}
+												onClick={() => openEditDialog(student)}
 												aria-label="Edit"
 											>
-												<Pencil className="size-4" />
+												<SquarePen className="size-4" />
 											</Button>
 											<Button
 												variant="ghost"
 												size="icon"
 												className="size-8 text-destructive hover:text-destructive"
-												onClick={() => onDelete?.(student)}
+												onClick={() => handleDeleteClick(student)}
 												aria-label="Delete"
 											>
 												<Trash2 className="size-4" />

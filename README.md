@@ -15,9 +15,7 @@ cp .env.example .env
 | `DATABASE_URL`              | PostgreSQL connection string (e.g. Neon or local)       |
 | `DB_SERVERLESS`             | Set to `true` for Neon/serverless, `false` for local pg |
 | `NEXT_PUBLIC_APTABASE_HOST` | Aptabase API host (e.g. `http://localhost:8000`)        |
-| `ADMIN_EMAIL`               | Admin login email                                       |
-| `ADMIN_PASSWORD`            | Admin login password                                    |
-| `JWT_SECRET`                | Secret used for JWT signing                             |
+| `JWT_SECRET`                | Secret used for JWT signing (required for auth)         |
 
 ### Run the dev server
 

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { StudentsTable } from "@/components/students-table"
-import { SectionCards } from "@/components/section-cards"
+// import { SectionCards } from "@/components/section-cards"
 import { SiteHeader } from "@/components/site-header"
 import {
   SidebarInset,
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
         <div className="flex flex-1 flex-col">
           <div className="@container/main flex flex-1 flex-col gap-2">
             <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-              <SectionCards />
+              {/* <SectionCards /> */}
               <StudentsTable />
             </div>
           </div>
